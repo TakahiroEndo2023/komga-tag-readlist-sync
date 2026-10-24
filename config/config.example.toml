@@ -1,0 +1,15 @@
+# Copy to ~/.config/ktrs/config.toml and adjust paths.
+favorite_tags = [
+  "no-chara-tag",
+  "no-work-tag",
+]
+
+[komga]
+url = "http://komga.home.arpa:80"
+api_key_file = "/etc/ktrs/api-key"
+timeout_seconds = 30
+page_size = 100
+
+[storage]
+state_file = "/var/lib/ktrs/state.json"
+lock_file = "/run/lock/ktrs.lock"

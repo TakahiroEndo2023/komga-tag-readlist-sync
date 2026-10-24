@@ -1,0 +1,16 @@
+[Unit]
+Description=Komga Tag Readlist Sync
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ai
+Group=ai
+ExecStart=/home/ai/.local/share/ktrs/venv/bin/ktrs --config /home/ai/.config/ktrs/config.toml sync
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ai/.local/state/ktrs
