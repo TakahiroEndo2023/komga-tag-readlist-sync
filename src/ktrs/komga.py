@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import socket
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
@@ -109,7 +110,7 @@ class KomgaClient:
 
     def search_book_ids_by_exact_tag(self, tag: str) -> list[str]:
         payload = {"condition": {"tag": {"operator": "is", "value": tag}}}
-        seen: set[str] = set()
+        books: dict[str, datetime] = {}
         page = 0
         expected_total: int | None = None
         expected_pages: int | None = None
@@ -123,21 +124,44 @@ class KomgaClient:
                 if not isinstance(book, dict):
                     raise ApiResponseError("Komga book entry is invalid")
                 book_id = book.get("id")
+                created = book.get("created")
                 metadata = book.get("metadata")
                 tags = metadata.get("tags") if isinstance(metadata, dict) else None
-                if not isinstance(book_id, str) or not book_id or book_id in seen:
+                if not isinstance(book_id, str) or not book_id or book_id in books:
                     raise ApiResponseError("Komga book identity is missing or duplicated")
+                if not isinstance(created, str):
+                    raise ApiResponseError("Komga book created timestamp is missing or invalid")
+                try:
+                    created_at = datetime.strptime(created, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                except ValueError as exc:
+                    raise ApiResponseError("Komga book created timestamp is missing or invalid") from exc
                 if not isinstance(tags, list) or any(not isinstance(item, str) for item in tags):
                     raise ApiResponseError("Komga book tags are incomplete")
                 if tag not in tags:
                     raise ApiResponseError("Komga returned a book without the exact requested tag")
-                seen.add(book_id)
+                books[book_id] = created_at
             if last:
                 break
             page += 1
-        if expected_total is None or len(seen) != expected_total:
+        if expected_total is None or len(books) != expected_total:
             raise ApiResponseError("Komga book search result is incomplete")
-        return sorted(seen)
+        by_id = sorted(books.items())
+        return [book_id for book_id, _ in sorted(by_id, key=lambda item: item[1], reverse=True)]
+
+    def list_book_tags(self) -> list[str]:
+        tags: set[str] = set()
+        query = urlencode({"include": "BOOK", "unpaged": "true"})
+        value = self._request("GET", f"/api/v2/tags?{query}")
+        content, total, pages, last = self._validate_page(value, 0, None, None)
+        if not last or pages not in {0, 1}:
+            raise ApiResponseError("Komga unpaged tag list has invalid pagination")
+        for tag in content:
+            if not isinstance(tag, str) or not tag or tag in tags:
+                raise ApiResponseError("Komga tag list contains an invalid or duplicate tag")
+            tags.add(tag)
+        if len(tags) != total:
+            raise ApiResponseError("Komga tag list is incomplete")
+        return sorted(tags)
 
     @staticmethod
     def validate_readlist(value: Any, *, expected_id: str | None = None) -> dict[str, Any]:

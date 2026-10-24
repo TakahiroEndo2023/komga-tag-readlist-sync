@@ -12,7 +12,10 @@ Ingest (MI) or Komga Auto Tagger (KAT).
   `tag / is / value` search condition.
 - Every page is checked for a stable total, stable page count, consistent
   `last` flag, complete Book metadata, unique IDs, and the exact requested tag.
-- Desired Book IDs are deduplicated and sorted by ID.
+- Desired Books are ordered by Komga's top-level `BookDto.created` registration
+  timestamp descending. Equal timestamps are ordered by Book ID ascending.
+  Missing or invalid registration timestamps stop synchronization; file
+  modification and publication dates are never used as fallbacks.
 - Existing Readlist IDs are retained. An unchanged ordered ID list is never
   PATCHed.
 - A PATCH is followed by GET verification of ownership metadata and the exact
@@ -173,6 +176,13 @@ with the exact marker tags `no-chara-tag` and `no-work-tag`.
 Favorites are stored uniquely in sorted order. Repeating `add` or `remove` is
 safe. Removing a favorite only removes it from future synchronization; it does
 not delete or modify its existing Komga Readlist or local ownership record.
+
+Before adding a new favorite, `ktrs add` retrieves all Komga Book tags through
+`GET /api/v2/tags?include=BOOK`, requires an exact case-sensitive match, and
+only then atomically updates the configuration. A missing tag, API failure, or
+incomplete tag response leaves the configuration unchanged. Close matches may
+be displayed as suggestions but are never selected automatically. Adding an
+already registered tag remains an offline, idempotent operation.
 
 `sync --tag` only accepts a currently registered favorite.
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import sys
 from pathlib import Path
 
@@ -11,6 +12,24 @@ from .komga import KomgaClient
 from .locking import ProcessLock
 from .state import StateStore
 from .sync import SyncEngine
+
+
+def _tag_suggestions(tag: str, available: list[str]) -> list[str]:
+    prefix = tag.partition(":")[0] + ":" if ":" in tag else ""
+    candidates = [item for item in available if not prefix or item.startswith(prefix)]
+    return difflib.get_close_matches(tag, candidates, n=3, cutoff=0.6)
+
+
+def _validate_tag_exists(client: KomgaClient, tag: str) -> None:
+    available = client.list_book_tags()
+    if tag in available:
+        return
+    lines = [f"tag not found: {tag}"]
+    suggestions = _tag_suggestions(tag, available)
+    if suggestions:
+        lines.append(f"Did you mean: {', '.join(suggestions)}")
+    lines.append("No changes made.")
+    raise KtrsError("\n".join(lines))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -73,6 +92,13 @@ def main(argv: list[str] | None = None) -> int:
             if args.command == "add":
                 updated, changed = with_added_tag(config, args.tag)
                 if changed:
+                    client = KomgaClient(
+                        config.komga_url,
+                        config.api_key(),
+                        timeout=config.timeout_seconds,
+                        page_size=config.page_size,
+                    )
+                    _validate_tag_exists(client, validate_tag(args.tag))
                     save_config(args.config, updated)
                 print(f"{'added' if changed else 'unchanged'}: {validate_tag(args.tag)}")
                 return 0

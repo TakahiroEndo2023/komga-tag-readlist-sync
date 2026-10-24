@@ -19,6 +19,7 @@ FIXED_CREATED = "2026-10-24T03:59:00Z"
 class FakeKomga:
     def __init__(self):
         self.books_by_tag = {}
+        self.created_by_book = {}
         self.readlists = {}
         self.next_id = 1
         self.mutations = []
@@ -28,7 +29,8 @@ class FakeKomga:
     def search_book_ids_by_exact_tag(self, tag):
         if self.fail_search:
             raise ApiTransportError("network unavailable")
-        return sorted(set(self.books_by_tag.get(tag, [])))
+        ids = sorted(set(self.books_by_tag.get(tag, [])))
+        return sorted(ids, key=lambda book_id: self.created_by_book.get(book_id, FIXED_CREATED), reverse=True)
 
     def list_readlists(self):
         return copy.deepcopy(list(self.readlists.values()))
@@ -156,6 +158,47 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(result.result, "unchanged")
         self.assertEqual(record["summary"], expected)
         self.assertEqual(self.client.mutations, [])
+
+    def test_same_book_set_in_different_order_is_updated(self):
+        record = self.manage(ids=["b1", "b2"])
+        self.client.books_by_tag[self.tag] = ["b1", "b2"]
+        self.client.created_by_book = {
+            "b1": "2026-10-24T03:00:00Z",
+            "b2": "2026-10-24T04:00:00Z",
+        }
+        changed_at = datetime(2026, 10, 24, 4, 5, tzinfo=timezone.utc)
+        result = SyncEngine(self.client, self.store, clock=lambda: changed_at).sync_tag(self.state, self.tag)
+        self.assertEqual((result.result, result.added_count, result.removed_count), ("updated", 0, 0))
+        self.assertEqual(self.client.readlists["r1"]["bookIds"], ["b2", "b1"])
+        self.assertIn("Date: 2026-10-24 13:05 JST", record["summary"])
+        mutation_count = len(self.client.mutations)
+        again = SyncEngine(self.client, self.store, clock=lambda: changed_at).sync_tag(self.state, self.tag)
+        self.assertEqual(again.result, "unchanged")
+        self.assertEqual(len(self.client.mutations), mutation_count)
+
+    def test_add_remove_rebuilds_full_created_descending_order(self):
+        self.manage(ids=["b1", "b3"])
+        self.client.books_by_tag[self.tag] = ["b1", "b2"]
+        self.client.created_by_book = {
+            "b1": "2026-10-24T03:00:00Z",
+            "b2": "2026-10-24T05:00:00Z",
+        }
+        result = self.engine().sync_tag(self.state, self.tag)
+        self.assertEqual((result.added_count, result.removed_count), (1, 1))
+        self.assertEqual(self.client.readlists["r1"]["bookIds"], ["b2", "b1"])
+
+    def test_order_only_dry_run_reports_update_without_patch(self):
+        self.manage(ids=["b1", "b2"])
+        self.client.books_by_tag[self.tag] = ["b1", "b2"]
+        self.client.created_by_book = {
+            "b1": "2026-10-24T03:00:00Z",
+            "b2": "2026-10-24T04:00:00Z",
+        }
+        before = copy.deepcopy(self.state)
+        result = self.engine(dry_run=True).sync_tag(self.state, self.tag)
+        self.assertEqual((result.result, result.added_count, result.removed_count), ("updated", 0, 0))
+        self.assertEqual(self.client.mutations, [])
+        self.assertEqual(self.state, before)
 
     def test_zero_search_never_empties_existing_readlist(self):
         self.manage(ids=["b1"])
