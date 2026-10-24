@@ -2,7 +2,7 @@
 Description=Run Komga Tag Readlist Sync daily
 
 [Timer]
-OnCalendar=*-*-* 04:00:00 Asia/Tokyo
+OnCalendar=*-*-* 16:00:00 Asia/Tokyo
 Persistent=true
 AccuracySec=1min
 Unit=ktrs-sync.service

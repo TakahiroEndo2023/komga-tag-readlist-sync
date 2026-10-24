@@ -234,7 +234,7 @@ Coverage includes:
 
 ## Daily systemd synchronization
 
-The supplied timer runs once daily at 04:00 Asia/Tokyo. It is persistent, has
+The supplied timer runs once daily at 16:00 Asia/Tokyo. It is persistent, has
 no restart policy, and runs independently from MI and KAT. KTRS's own
 nonblocking lock remains the concurrency boundary.
 
