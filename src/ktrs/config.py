@@ -9,7 +9,7 @@ from pathlib import Path
 from .atomic import atomic_write_text, reject_symlink
 from .errors import ConfigError, StateError
 
-TAG_RE = re.compile(r"^(?:(?:character|work):[^\s\x00-\x1f\x7f]+|no-chara-tag|no-work-tag)$")
+TAG_RE = re.compile(r"^(?:(?:chara|character|work):[^\s\x00-\x1f\x7f]+|no-chara-tag|no-work-tag)$")
 
 
 def default_config_path() -> Path:
@@ -51,7 +51,7 @@ class Config:
 def validate_tag(tag: str) -> str:
     if not isinstance(tag, str) or not TAG_RE.fullmatch(tag):
         raise ConfigError(
-            "tag must be character:<value>, work:<value>, no-chara-tag, or no-work-tag"
+            "tag must be chara:<value>, character:<value>, work:<value>, no-chara-tag, or no-work-tag"
         )
     return tag
 
